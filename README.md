@@ -18,7 +18,7 @@ A cool detail is that for once I am not using PyMOL. In fact, the line `pyrosett
 <thead>
 <tr>
 <th>3-Letter</th>
-<th>Image</th>
+<th>&nbsp;Image&nbsp;of&nbsp;non-canonical&nbsp;amino&nbsp;acid</th>
 <th>File</th>
 <th>SMILES</th>
 </tr>
