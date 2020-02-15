@@ -155,7 +155,7 @@ class Params2SVG:
             print('No idea what this is.')
         self.mol = AllChem.ReplaceSubstructs(self.mol, query, rep, replacementConnectionPoint=0)[0]
 
-def main(path) -> Dict:
+def main(path) -> List[Params2SVG]:
     # starting = pyrosetta.pose_from_pdb("template.pdb")
     data = []
     for file in os.listdir(path):
@@ -169,6 +169,16 @@ def main(path) -> Dict:
                 print(err.__class__.__name__, err)
     return data
 
+def make_table(data: List[Params2SVG]):
+    for model in data:
+        if isinstance(model, Params2SVG):
+            print(
+                f'<tr><td style=>{model.name}</td><td><img src="svgs/{model.name}.svg"/> </td><td>{os.path.split(model.fullfile)[1]}</td><td><code>{model.smiles}</code></td></tr>')
+        else:
+            err = model["error"].replace("\n", "<br/>")
+            print(f'<tr><td> Error </td><td> X </td><td> {model["file"]} </td><td> {err} </td></tr>')
+
 if __name__ == '__main__':
     path = '/Users/matteoferla/rosetta_bin_mac_2019.35.60890_bundle/main/database/chemical/residue_type_sets/fa_standard/residue_types/l-ncaa'
     data = main(path)
+    make_table(data)
