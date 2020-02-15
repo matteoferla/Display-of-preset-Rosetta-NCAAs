@@ -1,9 +1,11 @@
-import time, os, re, pyrosetta, pymol2
+import time, os, re, pyrosetta
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdFMCS, rdDepictor, rdMolTransforms
 import rdkit.Chem.Draw as Draw
 from typing import List, Dict
 import os
+
+pyrosetta.init(f'-mute all')
 
 ##########################
 # TAKEN FROM https://blog.matteoferla.com/2020/02/guess-bond-order-in-rdkit-by-number-of.html
@@ -67,30 +69,13 @@ def fix_bond_order(mol: Chem.Mol) -> Chem.Mol:
     return mol
 
 
-#######################
-#
-def Lise(mol: Chem.Mol) -> Chem.Mol:
-    """
-    Make L amino acid. Modified to account for aldehyde and possible dimethyl on alpha
-    TAKEN FROM from https://blog.matteoferla.com/2019/10/rdkit-for-rosetta-plp-ligand-space-as.html
-
-    :param mol: aldehyde alpha
-    :return: carboxyl alpha
-    """
-    # query = Chem.MolFromSmiles('CC(C(=O)O)N') #there is no OXT atom.
-    dimethylglycine = Chem.MolFromSmiles('CC(C)(C(=O))N')
-    alanine = Chem.MolFromSmiles('CC(C(=O))N')
-    if mol.HasSubstructMatch(dimethylglycine):
-        query = dimethylglycine
-        rep = Chem.MolFromSmiles('CC(C)(C(=O)[O-])N')
-    else:
-        query = alanine
-        rep = Chem.MolFromSmiles('C[C@@H](C(=O)[O-])N')
-    return AllChem.ReplaceSubstructs(mol, query, rep, replacementConnectionPoint=0)[0]
-
 #####################################
 
 class Params2SVG:
+    glycine = Chem.MolFromSmiles('C(C(=O)O)N')
+    AllChem.Compute2DCoords(glycine)
+    dimethylglycine = Chem.MolFromSmiles('CC(C)(C(=O))N')
+    alanine = Chem.MolFromSmiles('CC(C(=O))N')
 
     def __init__(self, fullfile):
         self.fullfile = fullfile
@@ -102,7 +87,7 @@ class Params2SVG:
         print(self.name)
         self.make_pdb()
         self.make_mol()
-        print(self.smiles)
+        #print(self.smiles)
         self.make_png()
         self.make_svg()
 
@@ -114,7 +99,6 @@ class Params2SVG:
     def make_pdb(self):
         # pyrosetta.rosetta.basic.options.set_file_option('extra_res_fa',os.path.join(path, file))
         #pyrosetta.init(f'-extra_res_fa {self.fullfile} -mute all')
-        pyrosetta.init(f'-mute all')
         pose = pyrosetta.rosetta.core.pose.Pose()
         pyrosetta.rosetta.core.pose.make_pose_from_sequence(pose, 'A', 'fa_standard')
         MutateResidue = pyrosetta.rosetta.protocols.simple_moves.MutateResidue
@@ -128,17 +112,18 @@ class Params2SVG:
     def make_mol(self):
         try:
             mol = Chem.MolFromPDBFile(self.pdbfile, removeHs=False)
-            mol = fix_bond_order(mol)
-            # there is a command that does this: But I am lazy.
-            mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol))
-            self.mol = Lise(mol)
-        except:
-            mol = Chem.MolFromPDBFile(self.pdbfile)
-            self.mol = Lise(mol)
+            if mol is None:
+                raise ValueError('test_Unreadible.')
+            self.mol = fix_bond_order(mol)
+            self.mol = Chem.RemoveHs(self.mol)
+            AllChem.Compute2DCoords(self.mol)
+            self.Lise()
+        except BaseException as err:
+            print(f'{err.__class__.__name__}: {err}')
+            self.mol = Chem.MolFromPDBFile(self.pdbfile)
+            self.Lise()
         # glycine as reference for alignment
-        gly = Chem.MolFromSmiles('C(C(=O)O)N')
-        res = Chem.rdFMCS.FindMCS([self.mol, gly])
-        # common = Chem.MolFromSmarts(res.smartsString)
+        AllChem.GenerateDepictionMatching2DStructure(self.mol, self.glycine)
         self.smiles = Chem.MolToSmiles(self.mol)
 
     def make_svg(self):
@@ -151,6 +136,24 @@ class Params2SVG:
 
     def make_png(self):
         Draw.MolToFile(self.mol, f'pngs/{self.name}.png')
+
+    def Lise(self):
+        """
+        Make L amino acid. Modified to account for aldehyde and possible dimethyl on alpha
+        TAKEN FROM from https://blog.matteoferla.com/2019/10/rdkit-for-rosetta-plp-ligand-space-as.html
+        """
+        # query = Chem.MolFromSmiles('CC(C(=O)O)N') #there is no OXT atom.
+        if self.mol is None:
+            raise ValueError('Mol is None')
+        elif self.mol.HasSubstructMatch(self.dimethylglycine):
+            query = self.dimethylglycine
+            rep = Chem.MolFromSmiles('CC(C)(C(=O)[O-])N')
+        elif self.mol.HasSubstructMatch(self.alanine):
+            query = self.alanine
+            rep = Chem.MolFromSmiles('C[C@@H](C(=O)[O-])N')
+        else:
+            print('No idea what this is.')
+        self.mol = AllChem.ReplaceSubstructs(self.mol, query, rep, replacementConnectionPoint=0)[0]
 
 def main(path) -> Dict:
     # starting = pyrosetta.pose_from_pdb("template.pdb")
