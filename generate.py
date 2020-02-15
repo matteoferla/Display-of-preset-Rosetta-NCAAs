@@ -2,10 +2,8 @@ import time, os, re, pyrosetta, pymol2
 from rdkit import Chem
 from rdkit.Chem import AllChem, rdFMCS, rdDepictor, rdMolTransforms
 import rdkit.Chem.Draw as Draw
-from typing import List
+from typing import List, Dict
 import os
-
-
 
 ##########################
 # TAKEN FROM https://blog.matteoferla.com/2020/02/guess-bond-order-in-rdkit-by-number-of.html
@@ -70,14 +68,25 @@ def fix_bond_order(mol: Chem.Mol) -> Chem.Mol:
 
 
 #######################
-# TAKEN FROM from https://blog.matteoferla.com/2019/10/rdkit-for-rosetta-plp-ligand-space-as.html
-def Lise(mol):
-    """Make L amino acid."""
-    # query = Chem.MolFromSmiles('CC(C(=O)O)N') #there is no OXT atom.
-    query = Chem.MolFromSmiles('CC(C(=O))N')
-    rep = Chem.MolFromSmiles('C[C@@H](C(=O)[O-])N')
-    return AllChem.ReplaceSubstructs(mol, query, rep, replacementConnectionPoint=0)[0]
+#
+def Lise(mol: Chem.Mol) -> Chem.Mol:
+    """
+    Make L amino acid. Modified to account for aldehyde and possible dimethyl on alpha
+    TAKEN FROM from https://blog.matteoferla.com/2019/10/rdkit-for-rosetta-plp-ligand-space-as.html
 
+    :param mol: aldehyde alpha
+    :return: carboxyl alpha
+    """
+    # query = Chem.MolFromSmiles('CC(C(=O)O)N') #there is no OXT atom.
+    dimethylglycine = Chem.MolFromSmiles('CC(C)(C(=O))N')
+    alanine = Chem.MolFromSmiles('CC(C(=O))N')
+    if mol.HasSubstructMatch(dimethylglycine):
+        query = dimethylglycine
+        rep = Chem.MolFromSmiles('CC(C)(C(=O)[O-])N')
+    else:
+        query = alanine
+        rep = Chem.MolFromSmiles('C[C@@H](C(=O)[O-])N')
+    return AllChem.ReplaceSubstructs(mol, query, rep, replacementConnectionPoint=0)[0]
 
 #####################################
 
@@ -104,24 +113,28 @@ class Params2SVG:
 
     def make_pdb(self):
         # pyrosetta.rosetta.basic.options.set_file_option('extra_res_fa',os.path.join(path, file))
-        pyrosetta.init(f'-extra_res_fa {self.fullfile} -mute all')
+        #pyrosetta.init(f'-extra_res_fa {self.fullfile} -mute all')
+        pyrosetta.init(f'-mute all')
         pose = pyrosetta.rosetta.core.pose.Pose()
         pyrosetta.rosetta.core.pose.make_pose_from_sequence(pose, 'A', 'fa_standard')
         MutateResidue = pyrosetta.rosetta.protocols.simple_moves.MutateResidue
         MutateResidue(target=1, new_res=self.name).apply(pose)
-        self.pdbfile = f'{self.name}.pdb'
-        self.ciffile = f'{self.name}.cif'
+        self.pdbfile = f'pdbs/{self.name}.pdb'
+        self.ciffile = f'cifs/{self.name}.cif'
         pose.dump_pdb(self.pdbfile)
         pose.dump_cif(self.ciffile)
         return self
 
     def make_mol(self):
         mol = Chem.MolFromPDBFile(self.pdbfile, removeHs=False)
-        mol = fix_bond_order(mol)
-        # there is a command that does this: But I am lazy.
-        mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol))
-        self.mol = Lise(mol)
-        # glycine as reference.
+        try:
+            mol = fix_bond_order(mol)
+            # there is a command that does this: But I am lazy.
+            mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol))
+            self.mol = Lise(mol)
+        except:
+            self.mol = mol
+        # glycine as reference for alignment
         gly = Chem.MolFromSmiles('C(C(=O)O)N')
         res = Chem.rdFMCS.FindMCS([self.mol, gly])
         # common = Chem.MolFromSmarts(res.smartsString)
@@ -133,14 +146,13 @@ class Params2SVG:
         drawer.DrawMolecule(self.mol)
         drawer.FinishDrawing()
         svg = drawer.GetDrawingText()
-        open(f'{self.name}.svg', 'w').write(svg)
+        open(f'svgs/{self.name}.svg', 'w').write(svg)
 
     def make_png(self):
-        Draw.MolToFile(self.mol, f'{self.name}.png')
+        Draw.MolToFile(self.mol, f'pngs/{self.name}.png')
 
 
-def main():
-    path = '/Users/matteoferla/rosetta_bin_mac_2019.35.60890_bundle/main/database/chemical/residue_type_sets/fa_standard/residue_types/l-ncaa'
+def main(path) -> Dict:
     # starting = pyrosetta.pose_from_pdb("template.pdb")
     data = []
     for file in os.listdir(path):
@@ -155,4 +167,5 @@ def main():
     return data
 
 if __name__ == '__main__':
-    data = main()
+    path = '/Users/matteoferla/rosetta_bin_mac_2019.35.60890_bundle/main/database/chemical/residue_type_sets/fa_standard/residue_types/l-ncaa'
+    data = main(path)

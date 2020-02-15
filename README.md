@@ -12,6 +12,8 @@ In the case of pyrosetta, the mover `pyrosetta.rosetta.protocols.simple_moves.Mu
 
 A cool detail is that for once I am not using PyMOL. In fact, the line `pyrosetta.rosetta.core.pose.make_pose_from_sequence(pose, 'A', 'fa_standard')` generates the pose from scratch.
 
+The `fix_bond_order` method has a problem with tryptophans due to a valence of 5 carbon. Makes sense though.
+
 ## Gallery
 
 <table>
