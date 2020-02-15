@@ -126,14 +126,15 @@ class Params2SVG:
         return self
 
     def make_mol(self):
-        mol = Chem.MolFromPDBFile(self.pdbfile, removeHs=False)
         try:
+            mol = Chem.MolFromPDBFile(self.pdbfile, removeHs=False)
             mol = fix_bond_order(mol)
             # there is a command that does this: But I am lazy.
             mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol))
             self.mol = Lise(mol)
         except:
-            self.mol = mol
+            mol = Chem.MolFromPDBFile(self.pdbfile)
+            self.mol = Lise(mol)
         # glycine as reference for alignment
         gly = Chem.MolFromSmiles('C(C(=O)O)N')
         res = Chem.rdFMCS.FindMCS([self.mol, gly])
@@ -150,7 +151,6 @@ class Params2SVG:
 
     def make_png(self):
         Draw.MolToFile(self.mol, f'pngs/{self.name}.png')
-
 
 def main(path) -> Dict:
     # starting = pyrosetta.pose_from_pdb("template.pdb")
